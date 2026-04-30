@@ -63,8 +63,9 @@ export default function App() {
         />
       ) : (
         <ChildInterface
-          profile={childProfile}
+          child={childProfile}
           onBack={handleSwitchToParent}
+          parentId={user.uid}
         />
       )}
     </div>

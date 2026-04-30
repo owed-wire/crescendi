@@ -5,11 +5,11 @@ const EMOJI_MAP = {
   'Breakfast': '🍳',
   'School': '🎓',
   'Lunch': '🍽️',
-  'Afternoon Activity': '⚽',
+  'Afternoon Activity': '🎮',
   'Homework': '📚',
   'Dinner': '🍜',
   'Bedtime Routine': '😴',
-  'Play Time': '🎮',
+  'Play Time': '🎨',
   'Exercise': '💪',
   'Reading': '📖',
   'Chores': '🧹'
@@ -27,12 +27,8 @@ export default function DailySchedule({ schedules, onTaskComplete, ageGroup, chi
 
     // Filter schedules for today
     const todaysSchedules = schedules.filter(schedule => {
-      // If daysOfWeek is not set, treat as every day
-      if (!schedule.daysOfWeek) {
-        return true;
-      }
-      // If daysOfWeek is set, check if today matches
-      return schedule.daysOfWeek.includes(today);
+      const daysOfWeek = schedule.daysOfWeek || [0, 1, 2, 3, 4, 5, 6]; // Default: every day
+      return daysOfWeek.includes(today);
     });
 
     // Merge all tasks from today's schedules

@@ -63,11 +63,6 @@ export default function ScheduleManager({ childId, parentId, onScheduleAdded }) 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!childId) {
-      alert('Please select a child first');
-      return;
-    }
-
     if (!scheduleName.trim() || tasks.length === 0 || selectedDays.length === 0) {
       alert('Please fill in all fields and select at least one day');
       return;
