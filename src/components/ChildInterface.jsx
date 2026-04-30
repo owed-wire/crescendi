@@ -9,18 +9,29 @@ import PINProtection from './PINProtection';
 export default function ChildInterface({ child, onBack, parentId }) {
   const [schedules, setSchedules] = useState([]);
   const [activeView, setActiveView] = useState('daily');
-  const [points, setPoints] = useState((child && child.points) || 0);
+  const [points, setPoints] = useState(0);
   const [showPINModal, setShowPINModal] = useState(false);
-  const [childData, setChildData] = useState(child || {});
+  const [childData, setChildData] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Load schedules from Firestore
   useEffect(() => {
-    if (!child || !child.id) return;
+    if (child) {
+      setChildData(child);
+      if (child.points) {
+        setPoints(child.points);
+      }
+    }
+  }, [child]);
+
+  useEffect(() => {
+    if (!childData || !childData.id) {
+      setLoading(false);
+      return;
+    }
 
     const q = query(
       collection(db, 'schedules'),
-      where('childId', '==', child.id),
+      where('childId', '==', childData.id),
       where('parentId', '==', parentId)
     );
 
@@ -34,24 +45,23 @@ export default function ChildInterface({ child, onBack, parentId }) {
     });
 
     return () => unsubscribe();
-  }, [child.id, parentId]);
+  }, [childData, parentId]);
 
-  // Handle task completion
   const handleTaskComplete = async () => {
     try {
       const newPoints = points + 10;
       setPoints(newPoints);
 
-      // Update in Firestore
-      await updateDoc(doc(db, 'children', child.id), {
-        points: newPoints
-      });
+      if (childData && childData.id) {
+        await updateDoc(doc(db, 'children', childData.id), {
+          points: newPoints
+        });
+      }
     } catch (error) {
       console.error('Error updating points:', error);
     }
   };
 
-  // Handle exit with PIN protection
   const handleExit = () => {
     setShowPINModal(true);
   };
@@ -60,6 +70,15 @@ export default function ChildInterface({ child, onBack, parentId }) {
     setShowPINModal(false);
     onBack();
   };
+
+  if (!childData) {
+    return (
+      <div className="loading-container">
+        <div className="spinner"></div>
+        <p>Loading child data...</p>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
@@ -72,11 +91,10 @@ export default function ChildInterface({ child, onBack, parentId }) {
 
   return (
     <div className="child-interface">
-      {/* Header */}
       <div className="child-header">
         <div className="child-info">
-          <span className="child-avatar">{childData.avatar}</span>
-          <h2>{childData.name}</h2>
+          <span className="child-avatar">{childData?.avatar || '👧'}</span>
+          <h2>{childData?.name || 'Child'}</h2>
           <div className="points-display">
             <span className="points-label">Points:</span>
             <span className="points-value">{points}</span>
@@ -91,7 +109,6 @@ export default function ChildInterface({ child, onBack, parentId }) {
         </button>
       </div>
 
-      {/* Navigation Tabs */}
       <div className="view-tabs">
         <button
           className={`tab ${activeView === 'daily' ? 'active' : ''}`}
@@ -113,14 +130,13 @@ export default function ChildInterface({ child, onBack, parentId }) {
         </button>
       </div>
 
-      {/* View Content */}
       <div className="view-content">
         {activeView === 'daily' && (
           <DailySchedule
             schedules={schedules}
             onTaskComplete={handleTaskComplete}
-            ageGroup={childData.age}
-            childName={childData.name}
+            ageGroup={childData?.age}
+            childName={childData?.name || 'Child'}
             points={points}
           />
         )}
@@ -128,11 +144,10 @@ export default function ChildInterface({ child, onBack, parentId }) {
           <CalendarView schedules={schedules} />
         )}
         {activeView === 'tracker' && (
-          <TaskTracker schedules={schedules} ageGroup={childData.age} />
+          <TaskTracker schedules={schedules} ageGroup={childData?.age} />
         )}
       </div>
 
-      {/* PIN Protection Modal */}
       {showPINModal && (
         <PINProtection
           onSuccess={handlePINSuccess}
