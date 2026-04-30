@@ -10,6 +10,7 @@ export default function ParentDashboard({ user, onSwitchToChild, onLogout }) {
   const [selectedChildId, setSelectedChildId] = useState(null);
   const [selectedChild, setSelectedChild] = useState(null);
   const [activeTab, setActiveTab] = useState('children');
+  const [showAddChild, setShowAddChild] = useState(false);
 
   // Load children
   useEffect(() => {
@@ -121,35 +122,69 @@ export default function ParentDashboard({ user, onSwitchToChild, onLogout }) {
       {/* Children Tab */}
       {activeTab === 'children' && (
         <div className="tab-content">
-          <ChildManager parentId={user.uid} onChildAdded={() => {}} />
-
           <h2>Your Children</h2>
+          
           {children.length === 0 ? (
-            <p className="empty-message">No children yet. Add one to get started!</p>
+            <div className="empty-message">
+              <p>No children yet. Create one to get started!</p>
+              <button 
+                className="btn-primary" 
+                onClick={() => setShowAddChild(true)}
+              >
+                + Add Child
+              </button>
+            </div>
           ) : (
-            <div className="children-grid">
-              {children.map(child => (
-                <div key={child.id} className="child-card">
-                  <div className="child-avatar">{child.avatar}</div>
-                  <h3>{child.name}</h3>
-                  <p className="child-age">{child.age} years old</p>
-                  <p className="child-points">⭐ {child.points || 0} points</p>
-                  <div className="child-actions">
-                    <button
-                      className="btn-primary"
-                      onClick={() => onSwitchToChild(child)}
-                    >
-                      View
-                    </button>
-                    <button
-                      className="btn-danger"
-                      onClick={() => handleDeleteChild(child.id)}
-                    >
-                      Delete
-                    </button>
+            <>
+              <div className="children-grid">
+                {children.map(child => (
+                  <div key={child.id} className="child-card">
+                    <div className="child-avatar">{child.avatar}</div>
+                    <h3>{child.name}</h3>
+                    <p className="child-age">{child.age} years old</p>
+                    <p className="child-points">⭐ {child.points || 0} points</p>
+                    <div className="child-actions">
+                      <button
+                        className="btn-primary"
+                        onClick={() => onSwitchToChild(child)}
+                      >
+                        View
+                      </button>
+                      <button
+                        className="btn-danger"
+                        onClick={() => handleDeleteChild(child.id)}
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
+
+              <div style={{ marginTop: '20px', textAlign: 'center' }}>
+                <button 
+                  className="btn-primary" 
+                  onClick={() => setShowAddChild(true)}
+                >
+                  + Add Another Child
+                </button>
+              </div>
+            </>
+          )}
+
+          {/* Add Child Modal */}
+          {showAddChild && (
+            <div className="modal-overlay" onClick={() => setShowAddChild(false)}>
+              <div className="modal-content" onClick={e => e.stopPropagation()}>
+                <button 
+                  className="modal-close" 
+                  onClick={() => setShowAddChild(false)}
+                  style={{ position: 'absolute', top: '10px', right: '10px', background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer' }}
+                >
+                  ✕
+                </button>
+                <ChildManager parentId={user.uid} onChildAdded={() => setShowAddChild(false)} />
+              </div>
             </div>
           )}
         </div>
@@ -163,7 +198,7 @@ export default function ParentDashboard({ user, onSwitchToChild, onLogout }) {
           ) : (
             <>
               <div className="schedule-selector">
-                <label>Switch child: </label>
+                <label>Select child: </label>
                 <select
                   value={selectedChildId || ''}
                   onChange={(e) => handleChildChange(e.target.value)}
