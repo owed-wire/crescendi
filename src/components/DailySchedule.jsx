@@ -1,114 +1,165 @@
-import { useState, useEffect } from 'react'
-import { FiCheck } from 'react-icons/fi'
+import { useEffect, useState } from 'react';
 
 const EMOJI_MAP = {
-  'Breakfast': '🥞',
-  'Lunch': '🍎',
-  'Dinner': '🍝',
-  'Snack': '🍪',
-  'Activity': '🎨',
-  'Play': '⚽',
-  'Learning': '📚',
-  'Chore': '🧹',
-  'Nap': '😴',
   'Morning Routine': '🌅',
-  'Bedtime': '🌙'
-}
+  'Breakfast': '🍳',
+  'School': '🎓',
+  'Lunch': '🍽️',
+  'Afternoon Activity': '🎮',
+  'Homework': '📚',
+  'Dinner': '🍜',
+  'Bedtime Routine': '😴',
+  'Play Time': '🎨',
+  'Exercise': '💪',
+  'Reading': '📖',
+  'Chores': '🧹'
+};
 
-export default function DailySchedule({ schedule, childAge, completedTasks, onTaskComplete }) {
-  const [celebration, setCelebration] = useState(null)
+export default function DailySchedule({ schedules, onTaskComplete, ageGroup, childName, points }) {
+  const [todaysTasks, setTodaysTasks] = useState([]);
+  const [completedCount, setCompletedCount] = useState(0);
+  const [celebrating, setCelebrating] = useState(false);
+  const [celebratingTaskId, setCelebratingTaskId] = useState(null);
 
-  const isYoungChild = ['2-4', '4-6'].includes(childAge)
+  useEffect(() => {
+    // Get current day of week (0 = Sunday, 6 = Saturday)
+    const today = new Date().getDay();
 
-  const handleTaskClick = (taskId) => {
-    onTaskComplete(taskId)
+    // Filter schedules for today
+    const todaysSchedules = schedules.filter(schedule => {
+      const daysOfWeek = schedule.daysOfWeek || [0, 1, 2, 3, 4, 5, 6]; // Default: every day
+      return daysOfWeek.includes(today);
+    });
 
-    // Show celebration
-    setCelebration(taskId)
-    setTimeout(() => setCelebration(null), 1500)
+    // Merge all tasks from today's schedules
+    const allTasks = [];
+    todaysSchedules.forEach(schedule => {
+      if (schedule.tasks && Array.isArray(schedule.tasks)) {
+        allTasks.push(...schedule.tasks.map(task => ({
+          ...task,
+          scheduleId: schedule.id,
+          scheduleName: schedule.name
+        })));
+      }
+    });
+
+    // Sort by time
+    allTasks.sort((a, b) => a.time.localeCompare(b.time));
+
+    setTodaysTasks(allTasks);
+    setCompletedCount(0);
+  }, [schedules]);
+
+  const handleTaskComplete = (taskIndex) => {
+    const task = todaysTasks[taskIndex];
+    setCelebratingTaskId(task.title);
+    setCelebrating(true);
+
+    // Play celebration sound
+    try {
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+
+      oscillator.frequency.value = 800;
+      oscillator.type = 'sine';
+      gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+
+      oscillator.start(audioContext.currentTime);
+      oscillator.stop(audioContext.currentTime + 0.3);
+    } catch (e) {
+      console.log('Audio not available');
+    }
+
+    setCompletedCount(prev => prev + 1);
+    onTaskComplete();
+
+    setTimeout(() => {
+      setCelebrating(false);
+      setCelebratingTaskId(null);
+    }, 2000);
+  };
+
+  const progressPercent = todaysTasks.length > 0 ? Math.round((completedCount / todaysTasks.length) * 100) : 0;
+  const isGraphicMode = ageGroup && ['2-4', '4-6'].includes(ageGroup);
+
+  if (todaysTasks.length === 0) {
+    return (
+      <div className="schedule-container">
+        <div className="no-tasks-message">
+          <p>🎉 No tasks for today! Well done! 🎉</p>
+        </div>
+      </div>
+    );
   }
-
-  const sortedTasks = [...(schedule.tasks || [])].sort((a, b) => {
-    const timeA = a.time.split(':').join('')
-    const timeB = b.time.split(':').join('')
-    return timeA.localeCompare(timeB)
-  })
-
-  const getTaskEmoji = (task) => {
-    return EMOJI_MAP[task.type] || '⭐'
-  }
-
-  const completedCount = Object.values(completedTasks).filter(Boolean).length
 
   return (
-    <div className="daily-schedule">
-      <div className="schedule-info">
-        <h2>{schedule.name}</h2>
-        <p>{schedule.description}</p>
+    <div className="schedule-container">
+      {/* Progress Bar */}
+      <div className="progress-section">
+        <div className="progress-label">
+          <span>Progress: {completedCount}/{todaysTasks.length}</span>
+          <span className="progress-percent">{progressPercent}%</span>
+        </div>
         <div className="progress-bar">
-          <div className="progress-fill" style={{ width: `${(completedCount / sortedTasks.length) * 100}%` }}></div>
-          <span className="progress-text">{completedCount} of {sortedTasks.length} completed</span>
+          <div className="progress-fill" style={{ width: `${progressPercent}%` }}></div>
         </div>
       </div>
 
-      <div className={`tasks-container ${isYoungChild ? 'graphic-mode' : 'text-mode'}`}>
-        {sortedTasks.map((task) => {
-          const isCompleted = completedTasks[`${schedule.id}-${task.id}`]
-          const isCelebrating = celebration === task.id
+      {/* Tasks */}
+      <div className="tasks-grid">
+        {todaysTasks.map((task, index) => (
+          <div
+            key={index}
+            className={`task-card ${celebratingTaskId === task.title ? 'celebrateCard' : ''}`}
+            onClick={() => handleTaskComplete(index)}
+          >
+            {isGraphicMode ? (
+              // Graphic mode for young kids (2-6)
+              <div className="graphic-mode">
+                <div className="task-emoji">{EMOJI_MAP[task.type] || '⭐'}</div>
+                <div className="task-title">{task.title}</div>
+                <div className="task-time">{task.time}</div>
+              </div>
+            ) : (
+              // Text mode for older kids (6+)
+              <div className="text-mode">
+                <div className="task-header">
+                  <span className="task-emoji">{EMOJI_MAP[task.type] || '⭐'}</span>
+                  <span className="task-title">{task.title}</span>
+                </div>
+                <div className="task-meta">
+                  <span className="task-type">{task.type}</span>
+                  <span className="task-time">⏰ {task.time}</span>
+                </div>
+                <div className="task-schedule">{task.scheduleName}</div>
+              </div>
+            )}
 
-          return (
-            <div
-              key={task.id}
-              className={`task-card ${isCompleted ? 'completed' : ''} ${isCelebrating ? 'celebrating' : ''}`}
-              onClick={() => handleTaskClick(task.id)}
-            >
-              {isYoungChild ? (
-                // Graphic mode for young children
-                <div className="task-graphic">
-                  <div className="task-emoji">{getTaskEmoji(task)}</div>
-                  <div className="task-title">{task.title}</div>
-                  <div className="task-time">{task.time}</div>
-                </div>
-              ) : (
-                // Text mode for older children
-                <div className="task-text">
-                  <div className="task-header">
-                    <span className="task-emoji">{getTaskEmoji(task)}</span>
-                    <span className="task-title">{task.title}</span>
-                  </div>
-                  <div className="task-meta">
-                    <span className="task-type">{task.type}</span>
-                    <span className="task-time">{task.time}</span>
-                  </div>
-                </div>
-              )}
-
-              {isCompleted && (
-                <div className="checkmark-overlay">
-                  <FiCheck className="checkmark-icon" />
-                </div>
-              )}
-
-              {isCelebrating && (
-                <div className="celebration-animation">
-                  <div className="celebration-text">Great job! 🎉</div>
-                  <div className="confetti">🎊🎉🌟✨</div>
-                </div>
-              )}
-            </div>
-          )
-        })}
+            {celebrating && celebratingTaskId === task.title && (
+              <div className="celebration-overlay">
+                <div className="celebration-text">Great job! 🎉</div>
+              </div>
+            )}
+          </div>
+        ))}
       </div>
 
-      {completedCount === sortedTasks.length && sortedTasks.length > 0 && (
-        <div className="completion-celebration">
-          <div className="big-celebration">
-            <h3>🎊 All Done! 🎊</h3>
-            <p>You completed everything!</p>
-            <div className="celebration-emojis">🌟 ⭐ 🎉 👏 🏆</div>
+      {/* Completion Message */}
+      {completedCount === todaysTasks.length && todaysTasks.length > 0 && (
+        <div className="completion-message">
+          <div className="completion-content">
+            <h2>🌟 All Done! 🌟</h2>
+            <p>Great job, {childName}! You completed all tasks!</p>
+            <p className="points-earned">+{todaysTasks.length * 10} points earned!</p>
+            <p className="total-points">Total: {points} points</p>
           </div>
         </div>
       )}
     </div>
-  )
+  );
 }
