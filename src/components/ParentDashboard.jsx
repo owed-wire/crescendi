@@ -1,300 +1,229 @@
-import { useState, useEffect } from 'react'
-import { db } from '../firebase'
-import {
-  collection,
-  addDoc,
-  updateDoc,
-  deleteDoc,
-  doc,
-  getDocs,
-  query,
-  where,
-  setDoc,
-  writeBatch
-} from 'firebase/firestore'
-import { FiLogOut, FiPlus, FiEdit2, FiTrash2, FiPlay } from 'react-icons/fi'
-import ChildManager from './ChildManager'
-import ScheduleManager from './ScheduleManager'
+import { useState, useEffect } from 'react';
+import { db } from '../firebase';
+import { collection, query, where, onSnapshot, deleteDoc, doc } from 'firebase/firestore';
+import ChildManager from './ChildManager';
+import ScheduleManager from './ScheduleManager';
 
-export default function ParentDashboard({ user, onLogout, onSwitchToChild }) {
-  const [activeTab, setActiveTab] = useState('children')
-  const [children, setChildren] = useState([])
-  const [schedules, setSchedules] = useState([])
-  const [selectedChild, setSelectedChild] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [showChildForm, setShowChildForm] = useState(false)
-  const [showScheduleForm, setShowScheduleForm] = useState(false)
+export default function ParentDashboard({ user, onSwitchToChild, onLogout }) {
+  const [children, setChildren] = useState([]);
+  const [schedules, setSchedules] = useState([]);
+  const [selectedChildId, setSelectedChildId] = useState(null);
+  const [selectedChild, setSelectedChild] = useState(null);
+  const [activeTab, setActiveTab] = useState('children');
 
   // Load children
   useEffect(() => {
-    const loadChildren = async () => {
-      try {
-        const q = query(
-          collection(db, 'children'),
-          where('parentId', '==', user.uid)
-        )
-        const snapshot = await getDocs(q)
-        const childrenData = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }))
-        setChildren(childrenData)
-        if (childrenData.length > 0 && !selectedChild) {
-          setSelectedChild(childrenData[0])
-        }
-      } catch (error) {
-        console.error('Error loading children:', error)
-      } finally {
-        setLoading(false)
-      }
-    }
+    if (!user?.uid) return;
 
-    loadChildren()
-  }, [user.uid])
+    const q = query(
+      collection(db, 'children'),
+      where('parentId', '==', user.uid)
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const childrenData = [];
+      snapshot.forEach((doc) => {
+        childrenData.push({ id: doc.id, ...doc.data() });
+      });
+      setChildren(childrenData);
+      
+      // Auto-select first child if none selected
+      if (childrenData.length > 0 && !selectedChildId) {
+        setSelectedChildId(childrenData[0].id);
+        setSelectedChild(childrenData[0]);
+      }
+    });
+
+    return () => unsubscribe();
+  }, [user?.uid, selectedChildId]);
 
   // Load schedules for selected child
   useEffect(() => {
-    if (!selectedChild) return
-
-    const loadSchedules = async () => {
-      try {
-        const q = query(
-          collection(db, 'schedules'),
-          where('childId', '==', selectedChild.id)
-        )
-        const snapshot = await getDocs(q)
-        const schedulesData = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }))
-        setSchedules(schedulesData)
-      } catch (error) {
-        console.error('Error loading schedules:', error)
-      }
+    if (!selectedChildId || !user?.uid) {
+      setSchedules([]);
+      return;
     }
 
-    loadSchedules()
-  }, [selectedChild])
+    const q = query(
+      collection(db, 'schedules'),
+      where('childId', '==', selectedChildId),
+      where('parentId', '==', user.uid)
+    );
 
-  const handleAddChild = async (childData) => {
-    try {
-      const docRef = await addDoc(collection(db, 'children'), {
-        ...childData,
-        parentId: user.uid,
-        createdAt: new Date(),
-        points: 0,
-        avatar: childData.avatar || '😊'
-      })
-      setChildren([...children, { id: docRef.id, ...childData, parentId: user.uid, points: 0 }])
-      setShowChildForm(false)
-    } catch (error) {
-      console.error('Error adding child:', error)
-    }
-  }
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const schedulesData = [];
+      snapshot.forEach((doc) => {
+        schedulesData.push({ id: doc.id, ...doc.data() });
+      });
+      setSchedules(schedulesData);
+    });
+
+    return () => unsubscribe();
+  }, [selectedChildId, user?.uid]);
+
+  // Update selected child when dropdown changes
+  const handleChildChange = (childId) => {
+    setSelectedChildId(childId);
+    const child = children.find(c => c.id === childId);
+    setSelectedChild(child);
+  };
 
   const handleDeleteChild = async (childId) => {
-    if (confirm('Are you sure? This will delete all schedules for this child.')) {
+    if (window.confirm('Are you sure you want to delete this child?')) {
       try {
-        // Delete child
-        await deleteDoc(doc(db, 'children', childId))
-
-        // Delete related schedules
-        const q = query(collection(db, 'schedules'), where('childId', '==', childId))
-        const snapshot = await getDocs(q)
-        const batch = writeBatch(db)
-        snapshot.docs.forEach(doc => batch.delete(doc.ref))
-        await batch.commit()
-
-        setChildren(children.filter(c => c.id !== childId))
-        if (selectedChild?.id === childId) {
-          setSelectedChild(children[0] || null)
+        await deleteDoc(doc(db, 'children', childId));
+        if (selectedChildId === childId) {
+          setSelectedChildId(null);
+          setSelectedChild(null);
         }
       } catch (error) {
-        console.error('Error deleting child:', error)
+        console.error('Error deleting child:', error);
       }
     }
-  }
-
-  const handleAddSchedule = async (scheduleData) => {
-    try {
-      const docRef = await addDoc(collection(db, 'schedules'), {
-        ...scheduleData,
-        childId: selectedChild.id,
-        parentId: user.uid,
-        createdAt: new Date(),
-        tasks: scheduleData.tasks || []
-      })
-      setSchedules([...schedules, { id: docRef.id, ...scheduleData }])
-      setShowScheduleForm(false)
-    } catch (error) {
-      console.error('Error adding schedule:', error)
-    }
-  }
+  };
 
   const handleDeleteSchedule = async (scheduleId) => {
-    if (confirm('Delete this schedule?')) {
+    if (window.confirm('Are you sure you want to delete this schedule?')) {
       try {
-        await deleteDoc(doc(db, 'schedules', scheduleId))
-        setSchedules(schedules.filter(s => s.id !== scheduleId))
+        await deleteDoc(doc(db, 'schedules', scheduleId));
       } catch (error) {
-        console.error('Error deleting schedule:', error)
+        console.error('Error deleting schedule:', error);
       }
     }
-  }
+  };
 
   return (
-    <div className="parent-dashboard">
-      <header className="dashboard-header">
-        <h1>📅 Parent Dashboard</h1>
-        <div className="header-actions">
-          <span className="user-email">{user.email}</span>
-          <button onClick={onLogout} className="logout-button">
-            <FiLogOut /> Sign Out
-          </button>
-        </div>
-      </header>
+    <div className="dashboard">
+      {/* Header */}
+      <div className="dashboard-header">
+        <h1>👨‍👩‍👧‍👦 Parent Dashboard</h1>
+        <button className="btn-logout" onClick={onLogout}>
+          Logout
+        </button>
+      </div>
 
-      <div className="dashboard-content">
-        {/* Tabs */}
-        <div className="dashboard-tabs">
-          <button
-            className={`tab-button ${activeTab === 'children' ? 'active' : ''}`}
-            onClick={() => setActiveTab('children')}
-          >
-            👨‍👩‍👧‍👦 Children
-          </button>
-          <button
-            className={`tab-button ${activeTab === 'schedules' ? 'active' : ''}`}
-            onClick={() => setActiveTab('schedules')}
-          >
-            📅 Schedules
-          </button>
-        </div>
+      {/* Tabs */}
+      <div className="tabs">
+        <button
+          className={`tab-btn ${activeTab === 'children' ? 'active' : ''}`}
+          onClick={() => setActiveTab('children')}
+        >
+          👨‍👩‍👧‍👦 Children
+        </button>
+        <button
+          className={`tab-btn ${activeTab === 'schedules' ? 'active' : ''}`}
+          onClick={() => setActiveTab('schedules')}
+        >
+          📅 Schedules
+        </button>
+      </div>
 
-        {/* Children Tab */}
-        {activeTab === 'children' && (
-          <div className="tab-content">
-            <div className="section-header">
-              <h2>Your Children</h2>
-              <button
-                className="btn btn-primary"
-                onClick={() => setShowChildForm(!showChildForm)}
-              >
-                <FiPlus /> Add Child
-              </button>
-            </div>
+      {/* Children Tab */}
+      {activeTab === 'children' && (
+        <div className="tab-content">
+          <ChildManager parentId={user.uid} onChildAdded={() => {}} />
 
-            {showChildForm && (
-              <ChildManager onSave={handleAddChild} onCancel={() => setShowChildForm(false)} />
-            )}
-
+          <h2>Your Children</h2>
+          {children.length === 0 ? (
+            <p className="empty-message">No children yet. Add one to get started!</p>
+          ) : (
             <div className="children-grid">
-              {children.length === 0 ? (
-                <p className="empty-state">No children added yet. Create one to get started!</p>
-              ) : (
-                children.map(child => (
-                  <div key={child.id} className="child-card">
-                    <div className="child-avatar">{child.avatar}</div>
-                    <h3>{child.name}</h3>
-                    <p className="child-age">Age: {child.age}</p>
-                    <p className="child-points">⭐ {child.points || 0} points</p>
-                    <div className="child-actions">
-                      <button
-                        className="btn btn-small btn-success"
-                        onClick={() => {
-                          setSelectedChild(child)
-                          onSwitchToChild(child)
-                        }}
-                      >
-                        <FiPlay /> View
-                      </button>
-                      <button
-                        className="btn btn-small btn-danger"
-                        onClick={() => handleDeleteChild(child.id)}
-                      >
-                        <FiTrash2 />
-                      </button>
-                    </div>
+              {children.map(child => (
+                <div key={child.id} className="child-card">
+                  <div className="child-avatar">{child.avatar}</div>
+                  <h3>{child.name}</h3>
+                  <p className="child-age">{child.age} years old</p>
+                  <p className="child-points">⭐ {child.points || 0} points</p>
+                  <div className="child-actions">
+                    <button
+                      className="btn-primary"
+                      onClick={() => onSwitchToChild(child)}
+                    >
+                      View
+                    </button>
+                    <button
+                      className="btn-danger"
+                      onClick={() => handleDeleteChild(child.id)}
+                    >
+                      Delete
+                    </button>
                   </div>
-                ))
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Schedules Tab */}
-        {activeTab === 'schedules' && (
-          <div className="tab-content">
-            {children.length === 0 ? (
-              <div className="empty-state">
-                <p>Add a child first to create schedules.</p>
-              </div>
-            ) : (
-              <>
-                <div className="section-header">
-                  <div>
-                    <h2>Schedules for {selectedChild?.name}</h2>
-                    <div className="child-selector">
-                      <label>Switch child:</label>
-                      <select
-                        value={selectedChild?.id || ''}
-                        onChange={(e) => {
-                          const child = children.find(c => c.id === e.target.value)
-                          setSelectedChild(child)
-                        }}
-                      >
-                        {children.map(child => (
-                          <option key={child.id} value={child.id}>{child.name}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                  <button
-                    className="btn btn-primary"
-                    onClick={() => setShowScheduleForm(!showScheduleForm)}
-                  >
-                    <FiPlus /> Add Schedule
-                  </button>
                 </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
-                {showScheduleForm && (
+      {/* Schedules Tab */}
+      {activeTab === 'schedules' && (
+        <div className="tab-content">
+          {children.length === 0 ? (
+            <p className="empty-message">Create a child first to manage schedules.</p>
+          ) : (
+            <>
+              <div className="schedule-selector">
+                <label>Switch child: </label>
+                <select
+                  value={selectedChildId || ''}
+                  onChange={(e) => handleChildChange(e.target.value)}
+                  className="schedule-select"
+                >
+                  <option value="">-- Select a child --</option>
+                  {children.map(child => (
+                    <option key={child.id} value={child.id}>
+                      {child.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {selectedChildId && (
+                <>
+                  <h2>Schedules for {selectedChild?.name}</h2>
                   <ScheduleManager
-                    childAge={selectedChild?.age}
-                    onSave={handleAddSchedule}
-                    onCancel={() => setShowScheduleForm(false)}
+                    childId={selectedChildId}
+                    parentId={user.uid}
+                    onScheduleAdded={() => {}}
                   />
-                )}
 
-                <div className="schedules-list">
                   {schedules.length === 0 ? (
-                    <p className="empty-state">No schedules yet. Create one to get started!</p>
+                    <p className="empty-message">No schedules yet. Create one to get started!</p>
                   ) : (
-                    schedules.map(schedule => (
-                      <div key={schedule.id} className="schedule-card">
-                        <h3>{schedule.name}</h3>
-                        <p>{schedule.description}</p>
-                        <div className="schedule-tasks">
-                          <strong>Tasks ({schedule.tasks?.length || 0}):</strong>
-                          <ul>
-                            {(schedule.tasks || []).map((task, idx) => (
-                              <li key={idx}>{task.title}</li>
-                            ))}
-                          </ul>
-                        </div>
-                        <div className="schedule-actions">
-                          <button className="btn btn-small btn-danger" onClick={() => handleDeleteSchedule(schedule.id)}>
-                            <FiTrash2 /> Delete
+                    <div className="schedules-list">
+                      {schedules.map(schedule => (
+                        <div key={schedule.id} className="schedule-item">
+                          <div>
+                            <h3>{schedule.name}</h3>
+                            <p>{schedule.description}</p>
+                            <p className="schedule-days">
+                              Days: {schedule.daysOfWeek ? getDayNames(schedule.daysOfWeek).join(', ') : 'Every day'}
+                            </p>
+                            <p className="schedule-tasks">
+                              Tasks: {schedule.tasks?.length || 0}
+                            </p>
+                          </div>
+                          <button
+                            className="btn-danger"
+                            onClick={() => handleDeleteSchedule(schedule.id)}
+                          >
+                            Delete
                           </button>
                         </div>
-                      </div>
-                    ))
+                      ))}
+                    </div>
                   )}
-                </div>
-              </>
-            )}
-          </div>
-        )}
-      </div>
+                </>
+              )}
+            </>
+          )}
+        </div>
+      )}
     </div>
-  )
+  );
+}
+
+function getDayNames(dayIds) {
+  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  return dayIds.map(id => days[id]).sort();
 }
