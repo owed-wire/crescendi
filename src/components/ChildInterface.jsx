@@ -9,29 +9,19 @@ import PINProtection from './PINProtection';
 export default function ChildInterface({ child, onBack, parentId }) {
   const [schedules, setSchedules] = useState([]);
   const [activeView, setActiveView] = useState('daily');
-  const [points, setPoints] = useState(0);
+  const [points, setPoints] = useState(child?.points || 0);
   const [showPINModal, setShowPINModal] = useState(false);
-  const [childData, setChildData] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (child) {
-      setChildData(child);
-      if (child.points) {
-        setPoints(child.points);
-      }
-    }
-  }, [child]);
-
-  useEffect(() => {
-    if (!childData || !childData.id) {
+    if (!child?.id) {
       setLoading(false);
       return;
     }
 
     const q = query(
       collection(db, 'schedules'),
-      where('childId', '==', childData.id),
+      where('childId', '==', child.id),
       where('parentId', '==', parentId)
     );
 
@@ -45,15 +35,15 @@ export default function ChildInterface({ child, onBack, parentId }) {
     });
 
     return () => unsubscribe();
-  }, [childData, parentId]);
+  }, [child?.id, parentId]);
 
   const handleTaskComplete = async () => {
     try {
       const newPoints = points + 10;
       setPoints(newPoints);
 
-      if (childData && childData.id) {
-        await updateDoc(doc(db, 'children', childData.id), {
+      if (child?.id) {
+        await updateDoc(doc(db, 'children', child.id), {
           points: newPoints
         });
       }
@@ -71,15 +61,6 @@ export default function ChildInterface({ child, onBack, parentId }) {
     onBack();
   };
 
-  if (!childData) {
-    return (
-      <div className="loading-container">
-        <div className="spinner"></div>
-        <p>Loading child data...</p>
-      </div>
-    );
-  }
-
   if (loading) {
     return (
       <div className="loading-container">
@@ -93,8 +74,8 @@ export default function ChildInterface({ child, onBack, parentId }) {
     <div className="child-interface">
       <div className="child-header">
         <div className="child-info">
-          <span className="child-avatar">{childData?.avatar || '👧'}</span>
-          <h2>{childData?.name || 'Child'}</h2>
+          <span className="child-avatar">{child?.avatar || '👧'}</span>
+          <h2>{child?.name || 'Child'}</h2>
           <div className="points-display">
             <span className="points-label">Points:</span>
             <span className="points-value">{points}</span>
@@ -135,8 +116,8 @@ export default function ChildInterface({ child, onBack, parentId }) {
           <DailySchedule
             schedules={schedules}
             onTaskComplete={handleTaskComplete}
-            ageGroup={childData?.age}
-            childName={childData?.name || 'Child'}
+            ageGroup={child?.age}
+            childName={child?.name || 'Child'}
             points={points}
           />
         )}
@@ -144,7 +125,7 @@ export default function ChildInterface({ child, onBack, parentId }) {
           <CalendarView schedules={schedules} />
         )}
         {activeView === 'tracker' && (
-          <TaskTracker schedules={schedules} ageGroup={childData?.age} />
+          <TaskTracker schedules={schedules} ageGroup={child?.age} />
         )}
       </div>
 
