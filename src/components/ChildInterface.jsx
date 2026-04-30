@@ -9,14 +9,14 @@ import PINProtection from './PINProtection';
 export default function ChildInterface({ child, onBack, parentId }) {
   const [schedules, setSchedules] = useState([]);
   const [activeView, setActiveView] = useState('daily');
-  const [points, setPoints] = useState(child.points || 0);
+  const [points, setPoints] = useState((child && child.points) || 0);
   const [showPINModal, setShowPINModal] = useState(false);
-  const [childData, setChildData] = useState(child);
+  const [childData, setChildData] = useState(child || {});
   const [loading, setLoading] = useState(true);
 
   // Load schedules from Firestore
   useEffect(() => {
-    if (!child.id) return;
+    if (!child || !child.id) return;
 
     const q = query(
       collection(db, 'schedules'),
